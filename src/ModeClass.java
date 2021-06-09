@@ -1,6 +1,5 @@
 import java.io.IOException;
 import java.util.StringTokenizer;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IntWritable;
@@ -11,7 +10,9 @@ import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
-public class WordCount {
+import java.io.IOException;
+
+public class ModeClass {
 
     public static class TokenizerMapper
             extends Mapper<Object, Text, Text, IntWritable>{
@@ -24,9 +25,6 @@ public class WordCount {
             StringTokenizer itr = new StringTokenizer(value.toString());
             while (itr.hasMoreTokens()) {
                 String newStr = itr.nextToken();
-                if(newStr.contains("!") || newStr.matches(".*\\.*")){
-                    continue;
-                }
                 word.set(newStr);
                 context.write(word, one);
             }
@@ -36,9 +34,8 @@ public class WordCount {
     public static class IntSumReducer
             extends Reducer<Text,IntWritable,Text,IntWritable> {
         private IntWritable result = new IntWritable();
-
-
-
+        private int mostFrequent=0;
+        private Text tmpWord = new Text("");
         public void reduce(Text key, Iterable<IntWritable> values,
                            Context context
         ) throws IOException, InterruptedException {
@@ -46,11 +43,23 @@ public class WordCount {
             for (IntWritable val : values) {
                 sum += val.get();
             }
-            result.set(sum);
-            context.write(key, result);
+            if(sum > mostFrequent){
+                mostFrequent = 	sum;
+                tmpWord = key;
+            }
+
+            //result.set(sum);
+            //context.write(key, result);
 
 
         }
+        @Override
+        protected void cleanup(Context context) throws IOException, InterruptedException {
+            super.cleanup(context);
+            context.write(tmpWord, new IntWritable(mostFrequent));
+        }
+
+
     }
 
     public static void main(String[] args) throws Exception {
@@ -61,6 +70,7 @@ public class WordCount {
         job.setCombinerClass(IntSumReducer.class);
         job.setReducerClass(IntSumReducer.class);
         job.setOutputKeyClass(Text.class);
+        job.setNumReduceTasks(1);
         job.setOutputValueClass(IntWritable.class);
         FileInputFormat.addInputPath(job, new Path(args[0]));
         FileOutputFormat.setOutputPath(job, new Path(args[1]));
